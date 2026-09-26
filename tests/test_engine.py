@@ -71,3 +71,82 @@ def test_movable_notch_override():
 def test_all_rotor_notches_present():
     for name, data in ROTOR_DATA.items():
         assert data["notches"], f"{name} should have at least one notch"
+
+
+def test_get_set_positions_roundtrip():
+    """get_positions / set_positions should save and restore exactly."""
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "D", "V"))
+    snap = m.get_positions()
+    # step once, changing the positions
+    m.encode_letter("A")
+    m.set_positions(snap)
+    assert m.get_positions() == snap
+
+
+def test_backspace_restores_output():
+    """Encoding X, then undoing (set_positions), then encoding X again
+    must produce the same ciphertext both times — the rotor positions
+    before each keypress were identical."""
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "A", "A"))
+    before = m.get_positions()
+    out1, _ = m.encode_letter("X")
+    # rewind to the saved snapshot
+    m.set_positions(before)
+    out2, _ = m.encode_letter("X")
+    assert out1 == out2
+
+
+def test_backspace_across_double_step():
+    """The double-step anomaly affects both M and L rotors at once.  A
+    snapshot taken before the keypress that triggers it must restore both."""
+    # Rotor III notch is V, so right rotor at V will advance middle.
+    # Middle rotor II notch is E, so at E a double-step fires.
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "E", "U"))
+    before = m.get_positions()
+    m.encode_letter("A")
+    after_step = m.get_positions()
+    # Double-step means both middle AND left advanced.
+    assert after_step != before
+    # Restoring must bring all three back.
+    m.set_positions(before)
+    assert m.get_positions() == before
+
+
+def test_replay_is_idempotent():
+    """replay() must not change machine state — calling it twice returns the same cipher."""
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "D", "F"))
+    before = m.get_positions()
+    c1, _, _ = m.replay("HELLO")
+    c2, _, _ = m.replay("HELLO")
+    assert c1 == c2
+    assert m.get_positions() == before
+
+
+def test_replay_matches_sequential_encode():
+    """replay() must produce the same cipher as encoding letters one by one."""
+    m1 = Enigma(rotor_names=("I", "II", "III"), positions=("Q", "E", "V"))
+    m2 = Enigma(rotor_names=("I", "II", "III"), positions=("Q", "E", "V"))
+    text = "ATTACKATDAWN"
+    cipher_replay, _, _ = m1.replay(text)
+    cipher_seq = "".join(m2.encode_letter(ch)[0] for ch in text)
+    assert cipher_replay == cipher_seq
+
+
+def test_replay_spaces_do_not_step_rotors():
+    """A space in the text must be passed through as-is without advancing the rotors."""
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "A", "A"))
+    before = m.get_positions()
+    # Replay a space-only string — nothing should step
+    cipher, snaps, _ = m.replay("   ")
+    assert cipher == "   "
+    assert m.get_positions() == before
+    # Positions after each space should be the same start position
+    assert all(s == before for s in snaps)
+
+
+def test_replay_snapshot_count():
+    """replay() returns one snapshot per character in the input."""
+    m = Enigma(rotor_names=("I", "II", "III"), positions=("A", "A", "A"))
+    text = "HELLO WORLD"
+    _, snaps, _ = m.replay(text)
+    assert len(snaps) == len(text)
