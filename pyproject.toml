@@ -38,6 +38,7 @@ Changelog = "https://github.com/rexackermann/termigma/blob/main/CHANGELOG.md"
 "Reference simulator" = "https://people.physik.hu-berlin.de/~palloks/js/enigma/enigma-u_v262_en.html"
 
 [tool.setuptools_scm]
+local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
 where = ["src"]
