@@ -1,29 +1,26 @@
 name: Publish to PyPI
 
-# Fires when you publish a GitHub Release (tag it e.g. v1.0.0 first).
-# Uses PyPI's Trusted Publishing (OIDC) - no API token stored in this repo.
-# One-time setup on PyPI's side: on the project's PyPI page, go to
-# "Publishing" -> "Add a new publisher" and register:
-#   Owner: rexackermann   Repository: termigma
-#   Workflow: publish.yml   Environment: pypi
-# (If the project doesn't exist on PyPI yet, PyPI lets you pre-register a
-# trusted publisher for a not-yet-published project name from your account.)
-
 on:
-  release:
-    types: [published]
-  workflow_dispatch: {}  # lets you trigger a publish manually if needed
+  push:
+    branches:
+      - main  # Releases automatically on every commit pushed to main
+  workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for dynamic versioning (fetches tags & history)
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install build
+
+      - run: pip install build setuptools-scm
       - run: python -m build
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -34,10 +31,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write  # required for trusted publishing
+      id-token: write  # Required for trusted publishing (OIDC)
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
+
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # Avoids failing if a version was already published
